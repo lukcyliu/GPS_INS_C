@@ -104,7 +104,7 @@ double* kalman_GPS_INS_pv(double* Dpv,double Ve,double Vn,double Vu,double L,dou
     double* B = MatMulk(G,15,6,tao);
 
     //卡尔曼滤波开始
-    printf("Now Here is the KF:\n");
+   // printf("Now Here is the KF:\n");
 
     X = MatMul(A,15,15,X,15,1);
 //    printf("X:\n");
@@ -147,6 +147,7 @@ double* kalman_GPS_INS_pv(double* Dpv,double Ve,double Vn,double Vu,double L,dou
     return XX;
 }
 void setNull(){
+    free(X);
     X = NULL;
     PP = NULL;
 }

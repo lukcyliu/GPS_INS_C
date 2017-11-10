@@ -7,8 +7,9 @@
 #include "Turnning.h"
 
 //------------------------------main thread--------------------------------------------
-const char *openfile = "1030树莓派跑车输入.csv";
-const double INS_driftw_eight = 0;
+const char *openfile = "8.28.csv";
+const char *savefile = "离线结果.csv";
+const double INS_driftw_eight = 0.5;
 int doTurning = 1;//是否用turning算法航位推算覆盖Vccq,0为否
 double ***smoothRes;
 const int width = 12;//平滑窗口大小
@@ -41,9 +42,9 @@ double ax, ay, az, gx, gy, gz, mx, my, mz, jyYaw, GPSYaw = 0, GPSv = 0, GPSLongi
 double q[4];
 double smoothAx = 0, smoothAy = 0, smoothAz = 0, smoothGx = 0, smoothGy = 0, smoothGz = 0, smoothMx = 0, smoothMy = 0, smoothMz = 0, smoothGPSYaw = 0, smoothGPSv = 0;
 double GPSVn = 0, GPSVe = 0, GPSVu = 0;
-double lastGPSLongtitude = 0, lastGPSLattitude = 0, lastGPSh = 0;
-double last_L = 0, last_lamb = 0, last_h = 0;
-int firstGPSOff = 0;
+double lastGPSLongtitude = 0, lastGPSLattitude = 0, lastGPSh = 0,lastGPSyaw = 0,lastGPSv = 0;
+double last_L = 0, last_E = 0, last_h = 0;
+int firstGPSOff = 1;
 int firstGPSVcc_in = 0;
 int firstGPSVcc_out = 0;
 int GPSOff = 0;
@@ -215,7 +216,7 @@ int main(int argc, char *argv[]) {
         for (int j = 0; j < 3; j++)
             smoothRes[i][j] = (double *) malloc(sizeof(double) * 12);
     }
-    FILE *foutput = fopen("result.csv", "w"),*f_tokf= fopen("file_tokf.csv","w"),*f_kfresult = fopen("file_kfresult.csv","w");
+    FILE *foutput = fopen(savefile, "w"),*f_tokf= fopen("file_tokf.csv","w"),*f_kfresult = fopen("file_kfresult.csv","w");
     //循环队列滑动滤波算法测试
     double value_buf[width];
     int slideN = 0;
@@ -236,9 +237,12 @@ int main(int argc, char *argv[]) {
     my = data0[7];
     mz = -data0[8];
     lastGPSh = data0[16];
+
     h = lastGPSh;
     L = data0[15]  * 3.1415926 / 180;
     E = data0[14]  * 3.1415926 / 180;
+    last_E = E;
+    last_L = L;
     //求初始的姿态角
     Pitch0 = atan2(-ay, -az);
     Roll0 = atan2(ax, -az);
@@ -383,15 +387,9 @@ int main(int argc, char *argv[]) {
         lastAx = Vccq[0];
         lastAy = Vccq[1];
         lastAz = Vccq[2];
-        lastpVx = pVx;
-        lastpVy = pVy;
-        lastpVz = pVz;
-        last_L = L;
-        last_h = h;
 
-        lastGPSLongtitude = GPSLongitude;
-        lastGPSLattitude = GPSLattitude;
-        lastGPSh = GPSHeight;
+
+
 //
 ////---------------------------------------------------------融合------------------------------
         if (GPS_SN >= 4) {
@@ -420,7 +418,8 @@ int main(int argc, char *argv[]) {
                 setNull();
                 continue;
             }
-            printf("Now we are in the GPS/INS mode...........................................session 2\n");
+            firstGPSOff = 1;
+            //printf("Now we are in the GPS/INS mode...........................................session 2\n");
             if(GPSout == 1){
                 E = GPSLongitude * 3.1415926 / 180;
                 L = GPSLattitude * 3.1415926 / 180;
@@ -461,22 +460,44 @@ int main(int argc, char *argv[]) {
             E = E - 0.32 * XX[7];
             h = h - XX[8];
 
+            lastGPSLongtitude = GPSLongitude;
+            lastGPSLattitude = GPSLattitude;
+            lastGPSh = GPSHeight;
+            lastGPSyaw = GPSYaw;
+            lastGPSv = GPSv;
 
         }else if(GPS_SN < 4){
             printf("lost GPS..\nNow We are in INS Mode...................................session 3\n");
-            L = L - (lastpVy / (Rm + last_h)) * 0.2 * INS_driftw_eight;
-            E = E - (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2 * INS_driftw_eight;
-            h = h - lastpVz * 0.2 * 0.75;
+            if (firstGPSOff == 1){
+                printf("first set lost GPS---------------------3.1");
+                L = lastGPSLattitude * deg_rad;
+                E = lastGPSLongtitude * deg_rad;
+                h = lastGPSh;
+                firstGPSOff = 0;
+            }
+            lastpVx = lastGPSv * sin(Yaw * 3.1415926 / 180) / 3.6;
+            lastpVy = lastGPSv * cos(Yaw * 3.1415926 / 180) / 3.6;
+            L = L + (lastpVy / (Rm + last_h)) * 0.2 * INS_driftw_eight;
+            E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2 * INS_driftw_eight;
+            h = h ;
+            printf("%d E = %f, L = %f\n",d_count,E * rad_deg,L * rad_deg);
             GPSout = 1;
 
         }
 
+        lastpVx = pVx;
+        lastpVy = pVy;
+        lastpVz = pVz;
+        last_L = L;
+        last_h = h;
+
         memset(output_string, 0, 1000);
-        sprintf(output_string, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+        sprintf(output_string, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,"
+                        "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d\n",
                 smoothAx, smoothAy, smoothAz, smoothGx, smoothGy, smoothGz, smoothMx, smoothMy, smoothMz, smoothGPSYaw,
                 smoothGPSv, GPSVe, GPSVn, Roll, Pitch, Yaw, Vccq[0], Vccq[1], Vccq[2], pVx, pVy, pVz, E * rad_deg,
                 L * rad_deg, h,resultOrientation[0],resultOrientation[1],resultOrientation[2],resultOrientation[3],
-                stepP[0],stepP[1]);
+                stepP[0],stepP[1],lastGPSLattitude,lastGPSyaw,d_count);
 
         fprintf(foutput, "%s", output_string);
 
@@ -494,7 +515,5 @@ int main(int argc, char *argv[]) {
 
         d_count++;
         data = datas[d_count];
-    }
-    fclose(foutput);
-
+    }    fclose(foutput);
 }
