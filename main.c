@@ -475,12 +475,12 @@ int main(int argc, char *argv[]) {
                 h = lastGPSh;
                 firstGPSOff = 0;
             }
-            lastpVx = lastGPSv * sin(Yaw * 3.1415926 / 180) / 3.6;
-            lastpVy = lastGPSv * cos(Yaw * 3.1415926 / 180) / 3.6;
+            lastpVx = lastGPSv * sin(lastGPSyaw * 3.1415926 / 180) / 3.6;
+            lastpVy = lastGPSv * cos(lastGPSyaw * 3.1415926 / 180) / 3.6;
             L = L + (lastpVy / (Rm + last_h)) * 0.2 * INS_driftw_eight;
             E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2 * INS_driftw_eight;
             h = h ;
-            printf("%d E = %f, L = %f\n",d_count,E * rad_deg,L * rad_deg);
+            printf("%d E = %f, L = %f, lastGPSyaw = %f\n",d_count,E * rad_deg,L * rad_deg,lastGPSyaw);
             GPSout = 1;
 
         }
