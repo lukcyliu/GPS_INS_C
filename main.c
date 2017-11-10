@@ -11,6 +11,8 @@ const char *openfile = "8.28.csv";
 const char *savefile = "离线结果.csv";
 const double INS_driftw_eight = 0.5;
 int doTurning = 1;//是否用turning算法航位推算覆盖Vccq,0为否
+int GPSoffAddMod=1;//失效是的航向选取,1为用gpsyaw,2为用TurningYaw,3为用MahonyYaw
+const double distace_GPS = 10;
 double ***smoothRes;
 const int width = 12;//平滑窗口大小
 int firstSmooth = 0;
@@ -82,6 +84,7 @@ int count = 1;
 //for test
 int firstGPSVcc = 0;
 int GPSout = 0;
+
 
 
 char output_string[1000];
@@ -460,11 +463,22 @@ int main(int argc, char *argv[]) {
             E = E - 0.32 * XX[7];
             h = h - XX[8];
 
+
             lastGPSLongtitude = GPSLongitude;
             lastGPSLattitude = GPSLattitude;
             lastGPSh = GPSHeight;
             lastGPSyaw = GPSYaw;
             lastGPSv = GPSv;
+
+            double L_distance = fabs(L * rad_deg - GPSLattitude) * 111000;
+            double E_distance = fabs(E * rad_deg - GPSLongitude) * 111000 * cos(GPSLattitude);
+            double distance = sqrt(pow(L_distance,2) + pow(E_distance,2));
+
+            if(distance >= distace_GPS){
+                L = GPSLattitude * deg_rad;
+                E = GPSLongitude * deg_rad;
+            }
+
 
         }else if(GPS_SN < 4){
             printf("lost GPS..\nNow We are in INS Mode...................................session 3\n");
@@ -475,8 +489,16 @@ int main(int argc, char *argv[]) {
                 h = lastGPSh;
                 firstGPSOff = 0;
             }
-            lastpVx = lastGPSv * sin(lastGPSyaw * 3.1415926 / 180) / 3.6;
-            lastpVy = lastGPSv * cos(lastGPSyaw * 3.1415926 / 180) / 3.6;
+            if (GPSoffAddMod == 1) {
+                lastpVx = lastGPSv * sin(smoothGPSYaw * 3.1415926 / 180) / 3.6;
+                lastpVy = lastGPSv * cos(smoothGPSYaw * 3.1415926 / 180) / 3.6;
+            }else if (GPSoffAddMod == 2){
+                lastpVx = lastGPSv * sin(resultOrientation[3] * 3.1415926 / 180) / 3.6;
+                lastpVy = lastGPSv * cos(resultOrientation[3] * 3.1415926 / 180) / 3.6;
+            } else if(GPSoffAddMod == 3){
+                lastpVx = lastGPSv * sin(Yaw * 3.1415926 / 180) / 3.6;
+                lastpVy = lastGPSv * cos(Yaw * 3.1415926 / 180) / 3.6;
+            }
             L = L + (lastpVy / (Rm + last_h)) * 0.2 * INS_driftw_eight;
             E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2 * INS_driftw_eight;
             h = h ;
