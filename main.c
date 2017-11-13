@@ -5,14 +5,25 @@
 #include "NewKalmanFilter.h"
 #include "MahonyAHRS.h"
 #include "Turnning.h"
+#include "QueueWindow.h"
 
 //------------------------------main thread--------------------------------------------
 const char *openfile = "8.28.csv";
 const char *savefile = "离线结果.csv";
 const double INS_driftw_eight = 0.5;
 int doTurning = 1;//是否用turning算法航位推算覆盖Vccq,0为否
-int GPSoffAddMod=1;//失效是的航向选取,1为用gpsyaw,2为用TurningYaw,3为用MahonyYaw
+int GPSoffAddMod=3;//失效是的航向选取,1为用gpsyaw,2为用TurningYaw,3为用MahonyYaw
 const double distace_GPS = 10;
+const int qwindow_size = 10;
+const double samplePeriod = 0.2;
+
+struct QueueWindow queueWindow_gyo;
+struct QueueWindow queueWindow_mag;
+double queueWindow_gyo_avg = 0;
+double queueWindow_mag_avg = 0;
+double lastGz = 0;
+double gyrOrienDiff = 0;
+
 double ***smoothRes;
 const int width = 12;//平滑窗口大小
 int firstSmooth = 0;
@@ -224,6 +235,11 @@ int main(int argc, char *argv[]) {
     double value_buf[width];
     int slideN = 0;
 
+    struct QueueWindow *qWindow_gyo = &queueWindow_gyo;
+    struct QueueWindow *qWindow_mag = &queueWindow_mag;
+    w_InitQueue(qWindow_gyo,qwindow_size);
+    w_InitQueue(qWindow_mag,qwindow_size);
+
     //数据读取
     double **datas = getDatas(data_size);
 
@@ -341,13 +357,28 @@ int main(int argc, char *argv[]) {
         quternionToCnbMatrix(q0, q1, q2, q3);
 
 
-        double *resultOrientation = TurnningTest(gx, gy, gz, -mx, -my, mz);
+        double *resultOrientation = TurnningTest(gx, gy, gz, mx, my, mz);
+        //调整磁力方向定义域
+        resultOrientation[2] = 90 - resultOrientation[2];
         stepP[0] += sin(resultOrientation[3] * 3.1415926 / 180);
         stepP[1] += cos(resultOrientation[3] * 3.1415926 / 180);
         gyoP[0] += sin(resultOrientation[0] * 3.1415926 / 180);
         gyoP[1] += cos(resultOrientation[0] * 3.1415926 / 180);
         magP[0] += sin(resultOrientation[2] * 3.1415926 / 180);
         magP[1] += cos(resultOrientation[2] * 3.1415926 / 180);
+        
+        //计算间隔内的陀螺仪绕z轴的方向增量
+        gyrOrienDiff = (gx + lastGz) * samplePeriod * 0.5;
+
+        if(w_isFull(qWindow_gyo))
+            w_DeQueue(qWindow_gyo);
+        if(w_isFull(qWindow_mag))
+            w_DeQueue(qWindow_mag);
+        w_EnQueue(qWindow_gyo,gyrOrienDiff);
+        w_EnQueue(qWindow_mag,resultOrientation[2]);
+
+        queueWindow_gyo_avg = w_getAVG(qWindow_gyo);
+        queueWindow_mag_avg = w_getAVG(qWindow_mag);
 
         //测试单步长匀速路径
         Px += cos(Yaw * 3.1415926 / 180);
@@ -379,13 +410,13 @@ int main(int argc, char *argv[]) {
         }
 
 
-        pVx += (Vccq[0]) * 0.2;
-        pVy += (Vccq[1]) * 0.2;
-        pVz += (Vccq[2]) * 0.2;
+        pVx += (Vccq[0]) * samplePeriod;
+        pVy += (Vccq[1]) * samplePeriod;
+        pVz += (Vccq[2]) * samplePeriod;
 
-        L = L + (lastpVy / (Rm + last_h)) * 0.2;
-        E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2;
-        h = h - lastpVz * 0.2;
+        L = L + (lastpVy / (Rm + last_h)) * samplePeriod;
+        E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * samplePeriod;
+        h = h - lastpVz * samplePeriod;
 
         lastAx = Vccq[0];
         lastAy = Vccq[1];
@@ -431,7 +462,7 @@ int main(int argc, char *argv[]) {
             }
             GPSout = 0;
 //---------------------------------------------------------融合------------------------------
-            tao += 0.2;
+            tao += samplePeriod;
             double Dpv[6] = {L * rad_deg - GPSLattitude, E * rad_deg - GPSLongitude, h - GPSHeight, pVx - GPSVe,
                              pVy - GPSVn, pVz - GPSVu};
 
@@ -499,8 +530,8 @@ int main(int argc, char *argv[]) {
                 lastpVx = lastGPSv * sin(Yaw * 3.1415926 / 180) / 3.6;
                 lastpVy = lastGPSv * cos(Yaw * 3.1415926 / 180) / 3.6;
             }
-            L = L + (lastpVy / (Rm + last_h)) * 0.2 * INS_driftw_eight;
-            E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * 0.2 * INS_driftw_eight;
+            L = L + (lastpVy / (Rm + last_h)) * samplePeriod * INS_driftw_eight;
+            E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * samplePeriod * INS_driftw_eight;
             h = h ;
             printf("%d E = %f, L = %f, lastGPSyaw = %f\n",d_count,E * rad_deg,L * rad_deg,lastGPSyaw);
             GPSout = 1;
@@ -512,14 +543,15 @@ int main(int argc, char *argv[]) {
         lastpVz = pVz;
         last_L = L;
         last_h = h;
+        lastGz = gz;
 
         memset(output_string, 0, 1000);
         sprintf(output_string, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,"
-                        "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d\n",
+                        "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d\n",
                 smoothAx, smoothAy, smoothAz, smoothGx, smoothGy, smoothGz, smoothMx, smoothMy, smoothMz, smoothGPSYaw,
                 smoothGPSv, GPSVe, GPSVn, Roll, Pitch, Yaw, Vccq[0], Vccq[1], Vccq[2], pVx, pVy, pVz, E * rad_deg,
                 L * rad_deg, h,resultOrientation[0],resultOrientation[1],resultOrientation[2],resultOrientation[3],
-                stepP[0],stepP[1],lastGPSLattitude,lastGPSyaw,d_count);
+                stepP[1],stepP[0],lastGPSLattitude,lastGPSyaw,queueWindow_mag_avg,queueWindow_gyo_avg,d_count);
 
         fprintf(foutput, "%s", output_string);
 
