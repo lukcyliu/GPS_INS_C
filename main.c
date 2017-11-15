@@ -8,18 +8,18 @@
 #include "QueueWindow.h"
 
 //------------------------------main thread--------------------------------------------
-//const char *openfile = "1108´óÍÍÂ·ÊäÈë¶ş¶Î.csv";
-//const char *savefile = "1108´óÍÍÂ·ÊäÈë¶ş¶ÎÀëÏß½á¹ûMod.csv";
+//const char *openfile = "1108å¤§å±¯è·¯è¾“å…¥äºŒæ®µ.csv";
+//const char *savefile = "1108å¤§å±¯è·¯è¾“å…¥äºŒæ®µç¦»çº¿ç»“æœMod.csv";
 const char *openfile = "8.28.csv";
-const char *savefile = "8.28ÀëÏß½á¹ûMod.csv";
+const char *savefile = "8.28ç¦»çº¿ç»“æœMod.csv";
 double INS_drift_weight = 0.5;
-int doTurning = 1;//ÊÇ·ñÓÃturningËã·¨º½Î»ÍÆËã¸²¸ÇVccq,0Îª·ñ
-int GPSoffAddMod=1;//Ê§Ğ§ÊÇµÄº½ÏòÑ¡È¡,1ÎªÓÃgpsyaw,2ÎªÓÃTurningYaw,3ÎªÓÃMahonyYaw
+int doTurning = 1;//æ˜¯å¦ç”¨turningç®—æ³•èˆªä½æ¨ç®—è¦†ç›–Vccq,0ä¸ºå¦
+int GPSoffAddMod=1;//å¤±æ•ˆæ˜¯çš„èˆªå‘é€‰å–,1ä¸ºç”¨gpsyaw,2ä¸ºç”¨TurningYaw,3ä¸ºç”¨MahonyYaw
 const double distace_GPS = 10;
 const int qwindow_size = 12;
 const double samplePeriod = 0.2;
-const int width = 12;//Æ½»¬´°¿Ú´óĞ¡
-const int data_size = 20;//Ã¿¸öÊı¾İµÄ³¤¶È
+const int width = 12;//å¹³æ»‘çª—å£å¤§å°
+const int data_size = 20;//æ¯ä¸ªæ•°æ®çš„é•¿åº¦
 
 struct QueueWindow queueWindow_gyo;
 struct QueueWindow queueWindow_mag;
@@ -31,8 +31,8 @@ double magOrientation = 0;
 double gyrOrientation = 0;
 double gyrOrientation_Off_start = 0;
 int getGyrOrientation0 = 0;
-int magGood = 0;//´ÅÁ¦ÓĞĞ§ĞÔ±êÖ¾Î»
-int usepVy = 1;//ÊÇ·ñÊ¹ÓÃ¹ßµ¼µÄËÙ¶È
+int magGood = 0;//ç£åŠ›æœ‰æ•ˆæ€§æ ‡å¿—ä½
+int usepVy = 1;//æ˜¯å¦ä½¿ç”¨æƒ¯å¯¼çš„é€Ÿåº¦
 
 double ***smoothRes;
 
@@ -53,7 +53,7 @@ double gyo[3][12];
 double mag[3][12];
 double gps[2][12];
 
-//acc¸ßÍ¨µÍÍ¨ÂË²¨
+//accé«˜é€šä½é€šæ»¤æ³¢
 double acc_mod = 0, acc_low = 0, acc_high = 0;
 double low_value = 0.2;
 double hx = 0, hy = 0, hAy = 0, hAx = 0, hVy = 0, hVx = 0, hSx = 0, hSy = 0, hV2 = 0, hS2 = 0, hSy2 = 0, hSx2 = 0, lasthA2 = 0, lasthV2 = 0;
@@ -84,7 +84,7 @@ double Pitch = 0, Roll = 0, Yaw = 0;
 double mx_Turning = 0,my_Turning = 0,mz_Turning = 0;
 double firstPitch = 0, firstRoll = 0, firstYaw = 0;
 double eInt[3] = {0, 0, 0};
-//Re³¤°ëÖá r¶Ì°ëÖá fÍÖÇò±âÂÊ eÍÖÇòÆ«ĞÄÂÊ wieµØÇò×Ô×ª½ÇËÙÂÊ
+//Reé•¿åŠè½´ rçŸ­åŠè½´ fæ¤­çƒæ‰ç‡ eæ¤­çƒåå¿ƒç‡ wieåœ°çƒè‡ªè½¬è§’é€Ÿç‡
 double earthRe = 6378137, earthr = 6356752.3142, earthf = 1 / 298.257, earthe = 0.0818, earthwie = 7.292e-5;
 extern double G0;
 double *Fn;
@@ -95,10 +95,10 @@ double WieE = 0, WinE = 0, WWX = 0;
 double Vccq[3] = {0, 0, 0};
 double L = 39.980793 * 3.1415926 / 180, E = 116.321083 * 3.1415926 / 180, h = 51.3;
 double L_off = 39.980793 * 3.1415926 / 180, E_off = 116.321083 * 3.1415926 / 180, h_off = 51.3;
-//ÈÚºÏµü´ú²¹³¥tao
+//èåˆè¿­ä»£è¡¥å¿tao
 double tao = 0;
 
-//MahonyÒıÈë±äÁ¿
+//Mahonyå¼•å…¥å˜é‡
 extern double q0, q1, q2, q3;
 double *mahonyR;
 double *XX;
@@ -213,7 +213,7 @@ void quternionToCnbMatrix(double q0, double q1, double q2, double q3) {
     double q1q2 = q1 * q2;
     double q1q3 = q1 * q3;
     double q2q3 = q2 * q3;
-    //¶¨ÒåCnb
+    //å®šä¹‰Cnb
     mahonyR[0] = q0q0 + q1q1 - q2q2 - q3q3;
     mahonyR[1] = 2 * (q1q2 - q0q3);
     mahonyR[2] = 2 * (q1q3 + q0q2);
@@ -243,7 +243,7 @@ int main(int argc, char *argv[]) {
             smoothRes[i][j] = (double *) malloc(sizeof(double) * width);
     }
     FILE *foutput = fopen(savefile, "w");
-    //Ñ­»·¶ÓÁĞ»¬¶¯ÂË²¨Ëã·¨²âÊÔ
+    //å¾ªç¯é˜Ÿåˆ—æ»‘åŠ¨æ»¤æ³¢ç®—æ³•æµ‹è¯•
     double value_buf[width];
     int slideN = 0;
 
@@ -252,10 +252,10 @@ int main(int argc, char *argv[]) {
     w_InitQueue(qWindow_gyo,qwindow_size);
     w_InitQueue(qWindow_mag,qwindow_size);
 
-    //Êı¾İ¶ÁÈ¡
+    //æ•°æ®è¯»å–
     double **datas = getDatas(data_size);
 
-    //³õÊ¼»¯¶¨×Ë
+    //åˆå§‹åŒ–å®šå§¿
     double *data0 = (double *) malloc(sizeof(double) * data_size);
     data0 = datas[0];
     ax = -(data0[0] - accCalErr_X);
@@ -274,7 +274,7 @@ int main(int argc, char *argv[]) {
     E = data0[14]  * 3.1415926 / 180;
     last_E = E;
     last_L = L;
-    //Çó³õÊ¼µÄ×ËÌ¬½Ç
+    //æ±‚åˆå§‹çš„å§¿æ€è§’
     Pitch0 = atan2(-ay, -az);
     Roll0 = atan2(ax, -az);
     Yaw0 = atan2(-my * cos(Roll0) + mz * sin(Roll0),
@@ -282,7 +282,7 @@ int main(int argc, char *argv[]) {
     firstPitch = Pitch0 * 57.29578;
     firstRoll = Roll0 * 57.29578;
     firstYaw = -Yaw0 * 57.29578;
-    //¼ÆËã³õÊ¼ËÄÔªÊı
+    //è®¡ç®—åˆå§‹å››å…ƒæ•°
     double *m_q0 = EularToQuaternion(Yaw0, Pitch0, Roll0);
     q0 = m_q0[0];
     q1 = m_q0[1];
@@ -321,8 +321,8 @@ int main(int argc, char *argv[]) {
 
 
 
-//---------------------------------------------»¬¶¯ÂË²¨-----------------------------------------------------------------//
-        //±©Á¦·¨
+//---------------------------------------------æ»‘åŠ¨æ»¤æ³¢-----------------------------------------------------------------//
+        //æš´åŠ›æ³•
         slideWindows(ax, ay, az, gx, gy, gz, mx, my, mz, GPSYaw, GPSv);
         for (int j = 0; j < width; ++j) {
             smoothAx += smoothRes[0][0][j];
@@ -353,17 +353,17 @@ int main(int argc, char *argv[]) {
         GPSVe = smoothGPSv * sin(smoothGPSYaw * 3.1415926 / 180) / 3.6;
         GPSVu = GPSHeight - lastGPSh;
 
-//-----------------------------------------------»¬¶¯ÂË²¨½áÊø-------------------------------------------------------------------//
+//-----------------------------------------------æ»‘åŠ¨æ»¤æ³¢ç»“æŸ-------------------------------------------------------------------//
 
-//-------------------------------------------------ÒÔÏÂÊÇÂÒÆß°ËÔãµÄ²âÊÔ²¿·Ö------------------------------------------------//
-//        //ÓÃmahony»¥²¹ÂË²¨¸üĞÂËÄÔªÊı²¢¼ÆËã³ö×ËÌ¬½Ç
+//-------------------------------------------------ä»¥ä¸‹æ˜¯ä¹±ä¸ƒå…«ç³Ÿçš„æµ‹è¯•éƒ¨åˆ†------------------------------------------------//
+//        //ç”¨mahonyäº’è¡¥æ»¤æ³¢æ›´æ–°å››å…ƒæ•°å¹¶è®¡ç®—å‡ºå§¿æ€è§’
         MahonyAHRSupdate((gx * deg_rad), (gy * deg_rad), (gz * deg_rad), ax,
                          ay, az, mx, my, mz);
         Yaw = -atan2(2 * q1 * q2 + 2 * q0 * q3, 2 * q0 * q0 + 2 * q0 * q2 - 1) * rad_deg;
         Pitch = asin(2 * q2 * q3 + 2 * q0 * q1) * rad_deg;
         Roll = -atan2(2 * q1 * q3 + 2 * q0 * q2, 2 * q0 * q0 + 2 * q3 * q3 - 1) * rad_deg;
 
-        //ÓĞ¸üĞÂËÄÔªÊıµÃµ½¸üĞÂĞı×ª¾ØÕóCnb
+        //æœ‰æ›´æ–°å››å…ƒæ•°å¾—åˆ°æ›´æ–°æ—‹è½¬çŸ©é˜µCnb
 //        q0 = data[20];
 //        q1 = data[21];
 //        q2 = data[22];
@@ -373,7 +373,7 @@ int main(int argc, char *argv[]) {
 
 
         double *resultOrientation = TurnningTest(gx, gy, gz, mx_Turning, my_Turning, mz_Turning);
-        //µ÷Õû´ÅÁ¦·½Ïò¶¨ÒåÓò
+        //è°ƒæ•´ç£åŠ›æ–¹å‘å®šä¹‰åŸŸ
         resultOrientation[2] = 90 - resultOrientation[2];
         resultOrientation[3] = 90 - resultOrientation[3];
         magOrientation = resultOrientation[3];
@@ -384,10 +384,10 @@ int main(int argc, char *argv[]) {
         magP[0] += sin(resultOrientation[2] * 3.1415926 / 180);
         magP[1] += cos(resultOrientation[2] * 3.1415926 / 180);
         
-        //¼ÆËã¼ä¸ôÄÚµÄÍÓÂİÒÇÈÆzÖáµÄ·½ÏòÔöÁ¿
+        //è®¡ç®—é—´éš”å†…çš„é™€èºä»ªç»•zè½´çš„æ–¹å‘å¢é‡
         gyrOrienDiff = (gx + lastGz) * samplePeriod * 0.5;
         gyrOrienDiff = -gyrOrienDiff;
-        //»ñµÃ³õÊ¼µÄÍÓÂİÒÇ·½Ïò
+        //è·å¾—åˆå§‹çš„é™€èºä»ªæ–¹å‘
         if(getGyrOrientation0 == 0){
             gyrOrientation = magOrientation;
             getGyrOrientation0 = 1;
@@ -405,20 +405,20 @@ int main(int argc, char *argv[]) {
         queueWindow_gyo_avg = w_getAVG(qWindow_gyo);
         queueWindow_mag_avg = w_getAVG(qWindow_mag);
 
-        //²âÊÔµ¥²½³¤ÔÈËÙÂ·¾¶
+        //æµ‹è¯•å•æ­¥é•¿åŒ€é€Ÿè·¯å¾„
         Px += cos(Yaw * 3.1415926 / 180);
         Py += sin(Yaw * 3.1415926 / 180);
 
 
-        //×ªÖÃµÃµ½Cbn
+        //è½¬ç½®å¾—åˆ°Cbn
 
-        //¼ÆËã¸üĞÂµÄ×ÓÎçÇúÂÊ°ë¾¶RmºÍÃ®ÓÏÇúÂÊ°ë¾¶RnÒÔ¼°ÇúÂÊÆ½¾ù°ë¾¶R0
+        //è®¡ç®—æ›´æ–°çš„å­åˆæ›²ç‡åŠå¾„Rmå’Œå¯é…‰æ›²ç‡åŠå¾„Rnä»¥åŠæ›²ç‡å¹³å‡åŠå¾„R0
         Rm = earthRe * (1 - 2 * earthf + 3 * earthf * sin(last_L) * sin(last_L));
         Rn = earthRe * (1 + earthf * sin(last_L) * sin(last_L));
         R0 = sqrt(Rm * Rm + Rn * Rn);
 
-//-----------------------------------------------------»ı·Ö²âÊÔ²¿·Ö--------------------------------------------------------//
-        //Í¶Ó°µ½¶«±±Ìì×ø±êÏµÏÂ¼ÆËã¾ø¶Ô¼ÓËÙ¶È±ÈÁ¦ºÍ¼ÆËã¾ø¶ÔËÙ¶ÈÎ¢·ÖVccq
+//-----------------------------------------------------ç§¯åˆ†æµ‹è¯•éƒ¨åˆ†--------------------------------------------------------//
+        //æŠ•å½±åˆ°ä¸œåŒ—å¤©åæ ‡ç³»ä¸‹è®¡ç®—ç»å¯¹åŠ é€Ÿåº¦æ¯”åŠ›å’Œè®¡ç®—ç»å¯¹é€Ÿåº¦å¾®åˆ†Vccq
         accToFn(smoothAx, smoothAy, smoothAz);
         Fn = MatMulk(Fn, 3, 1, G0);
 
@@ -450,7 +450,7 @@ int main(int argc, char *argv[]) {
 
 
 //
-////---------------------------------------------------------ÈÚºÏ------------------------------
+////---------------------------------------------------------èåˆ------------------------------
         if (GPS_SN >= 4) {
             firstGPSOff = 1;
             if(d_count % worksize == 0 ){
@@ -458,7 +458,7 @@ int main(int argc, char *argv[]) {
                 h = lastGPSh;
                 L = data[15]  * 3.1415926 / 180;
                 E = data[14]  * 3.1415926 / 180;
-                //Çó³õÊ¼µÄ×ËÌ¬½Ç
+                //æ±‚åˆå§‹çš„å§¿æ€è§’
                 Pitch0 = atan2(-ay, -az);
                 Roll0 = atan2(ax, -az);
                 Yaw0 = atan2(-my * cos(Roll0) + mz * sin(Roll0),
@@ -466,7 +466,7 @@ int main(int argc, char *argv[]) {
                 firstPitch = Pitch0 * 57.29578;
                 firstRoll = Roll0 * 57.29578;
                 firstYaw = -Yaw0 * 57.29578;
-                //¼ÆËã³õÊ¼ËÄÔªÊı
+                //è®¡ç®—åˆå§‹å››å…ƒæ•°
                 double *m_q0 = EularToQuaternion(Yaw0, Pitch0, Roll0);
                 q0 = m_q0[0];
                 q1 = m_q0[1];
@@ -488,7 +488,7 @@ int main(int argc, char *argv[]) {
                 printf("Now we are setting the GPS location again after GPS lost...........................................session 2_1\n");
             }
 
-//---------------------------------------------------------ÈÚºÏ------------------------------
+//---------------------------------------------------------èåˆ------------------------------
             tao += samplePeriod;
             double Dpv[6] = {L * rad_deg - GPSLattitude, E * rad_deg - GPSLongitude, h - GPSHeight, lastpVx - GPSVe,
                              lastpVy - GPSVn, lastpVz - GPSVu};
@@ -540,13 +540,13 @@ int main(int argc, char *argv[]) {
                 E = GPSLongitude * deg_rad;
             }
 
-            //¸ù¾İ´ÅÁ¦º½ÏòºÍgpsº½Ïò±È½ÏÅĞ¶Ïµ±Ç°´ÅÁ¦ÊÇ·ñÓĞĞ§
+            //æ ¹æ®ç£åŠ›èˆªå‘å’Œgpsèˆªå‘æ¯”è¾ƒåˆ¤æ–­å½“å‰ç£åŠ›æ˜¯å¦æœ‰æ•ˆ
             if (fabs(queueWindow_mag_avg - smoothGPSYaw) < 50) {
-                magGood = 1;//TurningÄ£Ê½
+                magGood = 1;//Turningæ¨¡å¼
                 doTurning = 1;
             }
             else{
-                magGood = 0;//MahonyÄ£Ê½
+                magGood = 0;//Mahonyæ¨¡å¼
                 doTurning = 0;
             }
 
@@ -557,12 +557,12 @@ int main(int argc, char *argv[]) {
                 L_off = lastGPSLattitude * deg_rad;
                 E_off = lastGPSLongtitude * deg_rad;
                 h_off = lastGPSh;
-                //ÉèÖÃ¸Õ½øÈëÊ§Ğ§½×¶ÎµÄÍÓÂİÒÇ½Ç¶È
+                //è®¾ç½®åˆšè¿›å…¥å¤±æ•ˆé˜¶æ®µçš„é™€èºä»ªè§’åº¦
                 gyrOrientation_Off_start = queueWindow_gyo_avg;
                 firstGPSOff = 0;
             }
 
-            //½øĞĞÊ§Ğ§ËÙ¶ÈÑ¡Ôñ
+            //è¿›è¡Œå¤±æ•ˆé€Ÿåº¦é€‰æ‹©
             if (ay * G0 > lastGPSv) {
                 usepVy = 1;
                 INS_drift_weight = 0.5;
@@ -571,7 +571,7 @@ int main(int argc, char *argv[]) {
                 usepVy = 0;
                 INS_drift_weight = 1;
             }
-            //½øĞĞÊ§Ğ§Ä£Ê½ÅĞ¶Ï
+            //è¿›è¡Œå¤±æ•ˆæ¨¡å¼åˆ¤æ–­
             if (fabs(queueWindow_gyo_avg - gyrOrientation_Off_start) < 30) {
                 GPSoffAddMod = 1;
                 INS_drift_weight = 1;
@@ -648,5 +648,6 @@ int main(int argc, char *argv[]) {
         smoothGPSv = 0;
         d_count++;
         data = datas[d_count];
-    }    fclose(foutput);
+    }
+    fclose(foutput);
 }
