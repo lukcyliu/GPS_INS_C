@@ -8,6 +8,8 @@
 #include "QueueWindow.h"
 
 //------------------------------main thread--------------------------------------------
+//const char *openfile = "1108大屯路输入二段.csv";
+//const char *savefile = "1108大屯路输入二段离线结果Mod.csv";
 const char *openfile = "8.28.csv";
 const char *savefile = "8.28离线结果Mod.csv";
 double INS_drift_weight = 0.5;
@@ -488,8 +490,8 @@ int main(int argc, char *argv[]) {
 
 //---------------------------------------------------------融合------------------------------
             tao += samplePeriod;
-            double Dpv[6] = {L * rad_deg - GPSLattitude, E * rad_deg - GPSLongitude, h - GPSHeight, pVx - GPSVe,
-                             pVy - GPSVn, pVz - GPSVu};
+            double Dpv[6] = {L * rad_deg - GPSLattitude, E * rad_deg - GPSLongitude, h - GPSHeight, lastpVx - GPSVe,
+                             lastpVy - GPSVn, lastpVz - GPSVu};
 
 //            char datas_tokf[10000];
 //            sprintf(datas_tokf,"%d,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n"
@@ -561,11 +563,14 @@ int main(int argc, char *argv[]) {
             }
 
             //进行失效速度选择
-            if (ay * G0 > lastGPSv)
+            if (ay * G0 > lastGPSv) {
                 usepVy = 1;
-            else
+                INS_drift_weight = 0.5;
+            }
+            else {
                 usepVy = 0;
-
+                INS_drift_weight = 1;
+            }
             //进行失效模式判断
             if (fabs(queueWindow_gyo_avg - gyrOrientation_Off_start) < 30) {
                 GPSoffAddMod = 1;
@@ -573,13 +578,13 @@ int main(int argc, char *argv[]) {
             }
             else if(magGood == 1) {
                 GPSoffAddMod = 2;
-                INS_drift_weight = 1;
                 lastGPSyaw = resultOrientation[3];
+                INS_drift_weight = 1;
             }
             else {
                 GPSoffAddMod = 3;
-                INS_drift_weight = 0.5;
                 lastGPSyaw = Yaw;
+                INS_drift_weight = 0.5;
             }
 
 
@@ -616,10 +621,6 @@ int main(int argc, char *argv[]) {
             GPSout = 1;
 
         }
-
-        lastpVx = pVx;
-        lastpVy = pVy;
-        lastpVz = pVz;
         last_L = L;
         last_h = h;
         lastGz = gz;
@@ -645,7 +646,6 @@ int main(int argc, char *argv[]) {
         smoothMz = 0;
         smoothGPSYaw = 0;
         smoothGPSv = 0;
-
         d_count++;
         data = datas[d_count];
     }    fclose(foutput);
