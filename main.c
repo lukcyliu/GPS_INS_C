@@ -8,24 +8,27 @@
 #include "QueueWindow.h"
 
 //------------------------------main thread--------------------------------------------
-const char *openfile = "1108大屯路输入二段.csv";
-const char *savefile = "1108大屯路输入二段离线结果Mod.csv";
-double INS_driftw_eight = 0.5;
+const char *openfile = "8.28.csv";
+const char *savefile = "8.28离线结果Mod.csv";
+double INS_drift_weight = 0.5;
 int doTurning = 1;//是否用turning算法航位推算覆盖Vccq,0为否
 int GPSoffAddMod=1;//失效是的航向选取,1为用gpsyaw,2为用TurningYaw,3为用MahonyYaw
 const double distace_GPS = 10;
 const int qwindow_size = 12;
 const double samplePeriod = 0.2;
-const int width = 50;//平滑窗口大小
+const int width = 12;//平滑窗口大小
 const int data_size = 20;//每个数据的长度
 
 struct QueueWindow queueWindow_gyo;
 struct QueueWindow queueWindow_mag;
-double queueWindow_gyoDiff_avg = 0;
+double queueWindow_gyo_avg = 0;
 double queueWindow_mag_avg = 0;
 double lastGz = 0;
 double gyrOrienDiff = 0;
 double magOrientation = 0;
+double gyrOrientation = 0;
+double gyrOrientation_Off_start = 0;
+int getGyrOrientation0 = 0;
 int magGood = 0;//磁力有效性标志位
 int usepVy = 1;//是否使用惯导的速度
 
@@ -235,9 +238,9 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 4; i++) {
         smoothRes[i] = (double **) malloc(sizeof(double *) * 3);
         for (int j = 0; j < 3; j++)
-            smoothRes[i][j] = (double *) malloc(sizeof(double) * 12);
+            smoothRes[i][j] = (double *) malloc(sizeof(double) * width);
     }
-    FILE *foutput = fopen(savefile, "w"),*f_tokf= fopen("file_tokf.csv","w"),*f_kfresult = fopen("file_kfresult.csv","w");
+    FILE *foutput = fopen(savefile, "w");
     //循环队列滑动滤波算法测试
     double value_buf[width];
     int slideN = 0;
@@ -279,10 +282,10 @@ int main(int argc, char *argv[]) {
     firstYaw = -Yaw0 * 57.29578;
     //计算初始四元数
     double *m_q0 = EularToQuaternion(Yaw0, Pitch0, Roll0);
-//    q0 = m_q0[0];
-//    q1 = m_q0[1];
-//    q2 = m_q0[2];
-//    q3 = m_q0[3];
+    q0 = m_q0[0];
+    q1 = m_q0[1];
+    q2 = m_q0[2];
+    q3 = m_q0[3];
 //
 //    q0 = data0[20];
 //    q1 = data0[21];
@@ -370,7 +373,8 @@ int main(int argc, char *argv[]) {
         double *resultOrientation = TurnningTest(gx, gy, gz, mx_Turning, my_Turning, mz_Turning);
         //调整磁力方向定义域
         resultOrientation[2] = 90 - resultOrientation[2];
-        magOrientation = resultOrientation[2];
+        resultOrientation[3] = 90 - resultOrientation[3];
+        magOrientation = resultOrientation[3];
         stepP[0] += sin(resultOrientation[3] * 3.1415926 / 180);
         stepP[1] += cos(resultOrientation[3] * 3.1415926 / 180);
         gyoP[0] += sin(resultOrientation[0] * 3.1415926 / 180);
@@ -380,15 +384,23 @@ int main(int argc, char *argv[]) {
         
         //计算间隔内的陀螺仪绕z轴的方向增量
         gyrOrienDiff = (gx + lastGz) * samplePeriod * 0.5;
-
+        gyrOrienDiff = -gyrOrienDiff;
+        //获得初始的陀螺仪方向
+        if(getGyrOrientation0 == 0){
+            gyrOrientation = magOrientation;
+            getGyrOrientation0 = 1;
+            gyrOrientation += gyrOrienDiff;
+        }else{
+            gyrOrientation += gyrOrienDiff;
+        }
         if(w_isFull(qWindow_gyo))
             w_DeQueue(qWindow_gyo);
         if(w_isFull(qWindow_mag))
             w_DeQueue(qWindow_mag);
-        w_EnQueue(qWindow_gyo,gyrOrienDiff);
+        w_EnQueue(qWindow_gyo,gyrOrientation);
         w_EnQueue(qWindow_mag,magOrientation);
 
-        queueWindow_gyoDiff_avg = w_getAVG(qWindow_gyo);
+        queueWindow_gyo_avg = w_getAVG(qWindow_gyo);
         queueWindow_mag_avg = w_getAVG(qWindow_mag);
 
         //测试单步长匀速路径
@@ -421,9 +433,9 @@ int main(int argc, char *argv[]) {
         }
 
 
-        pVx += (Vccq[0]) * samplePeriod;
-        pVy += (Vccq[1]) * samplePeriod;
-        pVz += (Vccq[2]) * samplePeriod;
+        lastpVx += (Vccq[0]) * samplePeriod;
+        lastpVy += (Vccq[1]) * samplePeriod;
+        lastpVz += (Vccq[2]) * samplePeriod;
 
         L = L + (lastpVy / (Rm + last_h)) * samplePeriod;
         E = E + (lastpVx / (cos(last_L) * (Rn + last_h))) * samplePeriod;
@@ -438,6 +450,7 @@ int main(int argc, char *argv[]) {
 //
 ////---------------------------------------------------------融合------------------------------
         if (GPS_SN >= 4) {
+            firstGPSOff = 1;
             if(d_count % worksize == 0 ){
                 lastGPSh = GPSHeight;
                 h = lastGPSh;
@@ -463,15 +476,16 @@ int main(int argc, char *argv[]) {
                 setNull();
                 continue;
             }
-            firstGPSOff = 1;
+
             //printf("Now we are in the GPS/INS mode...........................................session 2\n");
             if(GPSout == 1){
                 E = GPSLongitude * 3.1415926 / 180;
                 L = GPSLattitude * 3.1415926 / 180;
                 h = GPSHeight;
+                GPSout = 0;
                 printf("Now we are setting the GPS location again after GPS lost...........................................session 2_1\n");
             }
-            GPSout = 0;
+
 //---------------------------------------------------------融合------------------------------
             tao += samplePeriod;
             double Dpv[6] = {L * rad_deg - GPSLattitude, E * rad_deg - GPSLongitude, h - GPSHeight, pVx - GPSVe,
@@ -498,18 +512,18 @@ int main(int argc, char *argv[]) {
 //                    ,XX[10],XX[11],XX[12],XX[13],XX[15]);
 //            fprintf(f_kfresult,datas_kfresult,10000);
 
-            pVx = pVx - XX[3];
-            pVy = pVy - XX[4];
-            pVz = pVz - XX[5];
-            L = L - 0.29 * XX[6];
-            E = E - 0.32 * XX[7];
-            h = h - XX[8];
+            lastpVx -= XX[3];
+            lastpVy -= XX[4];
+            lastpVz -= XX[5];
+            L -= 0.29 * XX[6];
+            E -= 0.32 * XX[7];
+            h -= XX[8];
 
 
             lastGPSLongtitude = GPSLongitude;
             lastGPSLattitude = GPSLattitude;
             lastGPSh = GPSHeight;
-            lastGPSyaw = GPSYaw;
+            lastGPSyaw = smoothGPSYaw;
             lastGPSv = GPSv;
 
             double L_distance = fabs(L * rad_deg - GPSLattitude) * 111000;
@@ -525,7 +539,7 @@ int main(int argc, char *argv[]) {
             }
 
             //根据磁力航向和gps航向比较判断当前磁力是否有效
-            if (abs(queueWindow_mag_avg - smoothGPSYaw) < 20) {
+            if (fabs(queueWindow_mag_avg - smoothGPSYaw) < 50) {
                 magGood = 1;//Turning模式
                 doTurning = 1;
             }
@@ -535,36 +549,44 @@ int main(int argc, char *argv[]) {
             }
 
         }else if(GPS_SN < 4){
+            printf("lost GPS..\nNow We are in INS Mode...................................session 3\n");
+            if (firstGPSOff == 1){
+                printf("first set lost GPS---------------------3.1\n");
+                L_off = lastGPSLattitude * deg_rad;
+                E_off = lastGPSLongtitude * deg_rad;
+                h_off = lastGPSh;
+                //设置刚进入失效阶段的陀螺仪角度
+                gyrOrientation_Off_start = queueWindow_gyo_avg;
+                firstGPSOff = 0;
+            }
+
             //进行失效速度选择
             if (ay * G0 > lastGPSv)
                 usepVy = 1;
             else
                 usepVy = 0;
+
             //进行失效模式判断
-            if (abs(queueWindow_gyoDiff_avg) < 0.5) {
+            if (fabs(queueWindow_gyo_avg - gyrOrientation_Off_start) < 30) {
                 GPSoffAddMod = 1;
-                INS_driftw_eight = 1;
+                INS_drift_weight = 1;
             }
             else if(magGood == 1) {
                 GPSoffAddMod = 2;
-                INS_driftw_eight = 0.5;
+                INS_drift_weight = 1;
+                lastGPSyaw = resultOrientation[3];
             }
             else {
                 GPSoffAddMod = 3;
-                INS_driftw_eight = 0.5;
+                INS_drift_weight = 0.5;
+                lastGPSyaw = Yaw;
             }
-            printf("lost GPS..\nNow We are in INS Mode...................................session 3\n");
-            if (firstGPSOff == 1){
-                printf("first set lost GPS---------------------3.1");
-                L_off = lastGPSLattitude * deg_rad;
-                E_off = lastGPSLongtitude * deg_rad;
-                h_off = lastGPSh;
-                firstGPSOff = 0;
-            }
+
+
             if (usepVy == 0){
                 if (GPSoffAddMod == 1) {
-                    lastpVx = lastGPSv * sin(smoothGPSYaw * 3.1415926 / 180) / 3.6;
-                    lastpVy = lastGPSv * cos(smoothGPSYaw * 3.1415926 / 180) / 3.6;
+                    lastpVx = lastGPSv * sin(lastGPSyaw * 3.1415926 / 180) / 3.6;
+                    lastpVy = lastGPSv * cos(lastGPSyaw * 3.1415926 / 180) / 3.6;
                 }else if (GPSoffAddMod == 2){
                     lastpVx = lastGPSv * sin(resultOrientation[3] * 3.1415926 / 180) / 3.6;
                     lastpVy = lastGPSv * cos(resultOrientation[3] * 3.1415926 / 180) / 3.6;
@@ -575,8 +597,8 @@ int main(int argc, char *argv[]) {
             }
             else {
                 if (GPSoffAddMod == 1) {
-                    lastpVx = ay * G0 * sin(smoothGPSYaw * 3.1415926 / 180) / 3.6;
-                    lastpVy = ay * G0 * cos(smoothGPSYaw * 3.1415926 / 180) / 3.6;
+                    lastpVx = ay * G0 * sin(lastGPSyaw * 3.1415926 / 180) / 3.6;
+                    lastpVy = ay * G0 * cos(lastGPSyaw * 3.1415926 / 180) / 3.6;
                 }else if (GPSoffAddMod == 2){
                     lastpVx = ay * G0 * sin(resultOrientation[3] * 3.1415926 / 180) / 3.6;
                     lastpVy = ay * G0 * cos(resultOrientation[3] * 3.1415926 / 180) / 3.6;
@@ -585,8 +607,8 @@ int main(int argc, char *argv[]) {
                     lastpVy = ay * G0 * cos(Yaw * 3.1415926 / 180) / 3.6;
                 }
             }
-            L_off += (lastpVy / (Rm + last_h)) * samplePeriod * INS_driftw_eight;
-            E_off += (lastpVx / (cos(last_L) * (Rn + last_h))) * samplePeriod * INS_driftw_eight;
+            L_off += (lastpVy / (Rm + last_h)) * samplePeriod * INS_drift_weight;
+            E_off += (lastpVx / (cos(last_L) * (Rn + last_h))) * samplePeriod * INS_drift_weight;
             L = L_off;
             E = E_off;
             h = h_off;
@@ -608,7 +630,7 @@ int main(int argc, char *argv[]) {
                 smoothAx, smoothAy, smoothAz, smoothGx, smoothGy, smoothGz, smoothMx, smoothMy, smoothMz, smoothGPSYaw,
                 smoothGPSv, GPSVe, GPSVn, Roll, Pitch, Yaw, Vccq[0], Vccq[1], Vccq[2], pVx, pVy, pVz, E * rad_deg,
                 L * rad_deg, h,resultOrientation[0],resultOrientation[1],resultOrientation[2],resultOrientation[3],
-                stepP[1],stepP[0],lastGPSLattitude,lastGPSyaw,queueWindow_mag_avg,queueWindow_gyoDiff_avg,d_count);
+                stepP[0],stepP[1],lastGPSLattitude,lastGPSyaw,queueWindow_mag_avg,queueWindow_gyo_avg,d_count);
 
         fprintf(foutput, "%s", output_string);
 
