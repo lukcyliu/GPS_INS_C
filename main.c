@@ -10,8 +10,8 @@
 //------------------------------main thread--------------------------------------------
 //const char *openfile = "1108大屯路输入二段.csv";
 //const char *savefile = "1108大屯路输入二段离线结果Mod.csv";
-const char *openfile = "8.28.csv";
-const char *savefile = "8.28离线结果Mod.csv";
+const char *openfile = "1117北邮跑车输入.csv";
+const char *savefile = "1117北邮跑车输出.csv";
 double INS_drift_weight = 0.5;
 int doTurning = 1;//是否用turning算法航位推算覆盖Vccq,0为否
 int GPSoffAddMod=1;//失效是的航向选取,1为用gpsyaw,2为用TurningYaw,3为用MahonyYaw
@@ -97,6 +97,8 @@ double L = 39.980793 * 3.1415926 / 180, E = 116.321083 * 3.1415926 / 180, h = 51
 double L_off = 39.980793 * 3.1415926 / 180, E_off = 116.321083 * 3.1415926 / 180, h_off = 51.3;
 //融合迭代补偿tao
 double tao = 0;
+int firstStaticGpsUse = 1;
+double lastGPSLongtitudeStatic = 0, lastGPSLattitudeStatic = 0, lastGPShStatic = 0;
 
 //Mahony引入变量
 extern double q0, q1, q2, q3;
@@ -538,6 +540,20 @@ int main(int argc, char *argv[]) {
             if(distance1 >= distace_GPS && distance2 < 100){
                 L = GPSLattitude * deg_rad;
                 E = GPSLongitude * deg_rad;
+            }
+
+            if (GPSv == 0 && fabs(-ay + accCalErr_Y) < 0.03){
+                if(firstStaticGpsUse == 1)
+                {
+                    lastGPSLattitudeStatic = lastGPSLattitude;
+                    lastGPSLongtitudeStatic = lastGPSLongtitude;
+                    lastGPShStatic = lastGPSh;
+                    firstStaticGpsUse = 0;
+                }
+                L = lastGPSLattitudeStatic * deg_rad;
+                E = lastGPSLongtitudeStatic * deg_rad;
+                h = lastGPShStatic;
+
             }
 
             //根据磁力航向和gps航向比较判断当前磁力是否有效
